@@ -522,13 +522,15 @@ function renderResults() {
   const zipInput = document.getElementById('zip');
 
   if (zip.length === 5) {
-    if (zipStatus === false) {
+    if (zipStatus !== true) {
       zipMsg.className = 'zip-msg out-area';
-      zipMsg.textContent = 'This tool is built for the Houston metro area. Call us at 512-945-9720 for a personalized consultation anywhere in Texas.';
+      zipMsg.textContent = zipStatus === false
+        ? 'This tool is built for the Houston metro area. Call us at 512-945-9720 for a personalized consultation anywhere in Texas.'
+        : 'Please enter a valid 5-digit ZIP code.';
       zipInput.classList.add('error');
       document.getElementById('results').classList.add('results-hidden');
       return;
-    } else if (zipStatus === true) {
+    } else {
       zipMsg.className = 'zip-msg in-area';
       zipMsg.textContent = 'Houston metro area — you\'re in our service area.';
       zipInput.classList.remove('error');
@@ -588,10 +590,12 @@ function renderCoverage(homeVal, ageKey, premium) {
   badge.innerHTML = badgeHTML;
 
   // ACV impact table for 11+ year roofs
+  const AGE_LABELS = {13: '11–15 year', 18: '16–20 year', 22: '20+ year'};
   if (ageKey >= 13) {
     const a = calcACV(homeVal, ageKey);
     const deprPct = Math.round(a.depr * 100);
     const acvPaysZero = a.acvPayout <= 0;
+    const ageLabel = AGE_LABELS[ageKey] || (ageKey + '-year');
 
     let acvNote = acvPaysZero
       ? `<tr><td class="row-label" colspan="2" style="color:#DC2626;font-size:0.78rem;padding-top:6px;">* Depreciation + deductible exceed replacement cost — insurance pays nothing. You pay the full amount.</td></tr>`
@@ -599,7 +603,7 @@ function renderCoverage(homeVal, ageKey, premium) {
 
     acvSec.innerHTML = `
       <p style="font-size:0.82rem;font-weight:600;color:var(--gray-600);margin-bottom:8px;">
-        If your ${ageKey}-year-old roof is damaged in a hurricane:
+        If your ${ageLabel} old roof is damaged in a hurricane:
       </p>
       <table class="acv-table">
         <tr>
