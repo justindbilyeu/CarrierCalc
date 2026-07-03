@@ -360,6 +360,12 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
     </div>
 
     <div class="field">
+      <label for="quotedRoofCost">Quoted roof price <span style="font-weight:400;font-size:.8rem">(optional — enter the actual quote for this job)</span></label>
+      <div class="pfx-wrap"><input id="quotedRoofCost" type="number" inputmode="numeric" placeholder="16,500" min="1000" max="150000"></div>
+      <div class="hint">If entered, this replaces the modeled cost estimate everywhere below with your actual number. If left blank, we use a modeled estimate based on home value — clearly labeled as an estimate, not a quote.</div>
+    </div>
+
+    <div class="field">
       <label for="zip">ZIP code <span style="font-weight:400;font-size:.8rem">(optional)</span></label>
       <input type="text" id="zip" maxlength="5" placeholder="77494" inputmode="numeric">
       <div class="zip-msg" id="zipMsg"></div>
@@ -497,7 +503,7 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
   <!-- ── CTA ── -->
   <div class="card cta-center">
     <div class="eyebrow">Next Step</div>
-    <div class="card-h2">Let's get you up there and look</div>
+    <div class="card-h2">Get a straight assessment</div>
     <p>A straight assessment — what your carrier sees, what your coverage actually is, and what your options are. No claim filed, no pressure.</p>
     <div class="cta-btns">
       <a class="btn btn-call" href="tel:5129459720">Call Justin · 512-945-9720</a>
@@ -606,11 +612,15 @@ function getInputs() {
     deductible = homeValue * DWELLING_FRAC * parseFloat(basis);
   }
 
-  const roofCost = homeValue > 0
-    ? Math.max(8000, Math.min(28000, homeValue * 0.037 + 2600))
-    : 13000;
+  const quotedRoofCost = parseFloat(document.getElementById('quotedRoofCost').value) || 0;
+  const roofCostIsQuoted = quotedRoofCost > 0;
+  const roofCost = roofCostIsQuoted
+    ? quotedRoofCost
+    : (homeValue > 0
+        ? Math.max(8000, Math.min(28000, homeValue * 0.037 + 2600))
+        : 13000);
 
-  return { homeValue, premium, roofAge, ageValid, carrierKey, roofType, newRoof, stormFrac, deductible, roofCost };
+  return { homeValue, premium, roofAge, ageValid, carrierKey, roofType, newRoof, stormFrac, deductible, roofCost, roofCostIsQuoted };
 }
 
 function show(id)  { document.getElementById(id).style.display = ''; }
@@ -677,12 +687,16 @@ function renderSavings(inp) {
   // 10-year projection with 10% annual inflation
   let cumLo = 0, cumHi = 0;
   let bLo = premium, bHi = premium;
-  const yearlyMid = [];
+  const yearlyMid  = [];
+  const yearlyLow  = [];
+  const yearlyHigh = [];
   for (let y = 1; y <= 10; y++) {
     bLo *= (1 + INFLATION); bHi *= (1 + INFLATION);
     const sLo = bLo * stormFrac * (AGE_RERATE[0] * af + ir.range[0]);
     const sHi = bHi * stormFrac * (AGE_RERATE[1] * af + ir.range[1]);
     cumLo += sLo; cumHi += sHi;
+    yearlyLow.push(cumLo);
+    yearlyHigh.push(cumHi);
     yearlyMid.push((cumLo + cumHi) / 2);
   }
 
@@ -708,7 +722,7 @@ function renderSavings(inp) {
   show('savingsCard');
 
   renderLeverGuide(carrierKey, roofAge);
-  renderChart(yearlyMid, inp);
+  renderChart(yearlyMid, yearlyLow, yearlyHigh, inp);
   return { annLo, annHi, cumLo, cumHi, yearlyMid };
 }
 
@@ -765,9 +779,10 @@ function renderLeverGuide(selectedKey, roofAge) {
 
 // ─── COVERAGE / ACV ───────────────────────────────────────────────────────────
 function renderCoverage(inp) {
-  const { homeValue, roofAge, ageValid, roofCost, deductible } = inp;
+  const { homeValue, roofAge, ageValid, roofCost, roofCostIsQuoted, deductible } = inp;
   if (!ageValid) { hide('coverageCard'); return; }
   show('coverageCard');
+  const roofCostLabel = roofCostIsQuoted ? 'Roof replacement cost (your quote)' : 'Roof replacement cost (modeled estimate)';
 
   const badge = document.getElementById('covBadge');
   const acvSec = document.getElementById('acvSection');
@@ -799,7 +814,7 @@ function renderCoverage(inp) {
         If your ${roofAge}-year-old roof is damaged in a hurricane:
       </p>
       <table class="acv-tbl">
-        <tr><td class="ak">Roof replacement cost</td><td class="av">${fmt(roofCost)}</td></tr>
+        <tr><td class="ak">${roofCostLabel}</td><td class="av">${fmt(roofCost)}</td></tr>
         <tr><td class="ak">ACV depreciation (${deprPct}%)</td><td class="av neg">&minus;${fmt(roofCost * depr)}</td></tr>
         <tr><td class="ak">Your deductible</td><td class="av neg">&minus;${ded}</td></tr>
         <tr class="acv-div">
@@ -808,7 +823,7 @@ function renderCoverage(inp) {
         </tr>
         ${zeroNote}
         <tr><td colspan="2" style="padding:9px 10px 3px;font-weight:700;font-size:.8rem;color:var(--brand)">With a new roof (RCV policy):</td></tr>
-        <tr><td class="ak">Roof replacement cost</td><td class="av">${fmt(roofCost)}</td></tr>
+        <tr><td class="ak">${roofCostLabel}</td><td class="av">${fmt(roofCost)}</td></tr>
         <tr><td class="ak">Your deductible</td><td class="av neg">&minus;${ded}</td></tr>
         <tr class="acv-div"><td class="ak"><strong>RCV policy pays you</strong></td><td class="av pos">${fmt(rcvPay)}</td></tr>
       </table>
@@ -827,15 +842,27 @@ function renderCoverage(inp) {
 // ─── CHART ────────────────────────────────────────────────────────────────────
 let chartInst = null;
 
-function renderChart(yearlyMid, inp) {
-  const { roofCost } = inp;
-  const labels    = yearlyMid.map((_, i) => 'Yr ' + (i + 1));
-  const breakeven = yearlyMid.findIndex(v => v >= roofCost);
+function renderChart(yearlyMid, yearlyLow, yearlyHigh, inp) {
+  const { roofCost, roofCostIsQuoted } = inp;
+  const costPhrase = roofCostIsQuoted ? 'your quoted roof price' : 'the modeled roof cost estimate';
+  const labels = yearlyMid.map((_, i) => 'Yr ' + (i + 1));
+
+  // Breakeven as a range, not a single year: earliest possible (high-end
+  // savings) to latest/most-conservative (low-end savings). Reporting only
+  // the midpoint year implies precision the underlying range doesn't have.
+  const breakevenHigh = yearlyHigh.findIndex(v => v >= roofCost); // earliest plausible
+  const breakevenLow  = yearlyLow.findIndex(v => v >= roofCost);  // most conservative
 
   const note = document.getElementById('breakevenNote');
-  note.textContent = breakeven >= 0
-    ? `Projected breakeven: Year ${breakeven + 1} — cumulative savings exceed approximate roof replacement cost (${fmt(roofCost)}). Savings continue to compound as premiums rise.`
-    : `Approximate roof replacement cost for this home: ${fmt(roofCost)}. With your current inputs, savings may not exceed that within 10 years — select your carrier or adjust the storm share for a more specific view.`;
+  if (breakevenHigh < 0) {
+    note.textContent = `${roofCostIsQuoted ? 'Your quoted roof price' : 'Approximate roof replacement cost for this home'}: ${fmt(roofCost)}. Even on the high end of the estimated range, savings may not exceed that within 10 years — select your carrier or adjust the storm share for a more specific view.`;
+  } else if (breakevenLow < 0) {
+    note.textContent = `Projected breakeven: as early as Year ${breakevenHigh + 1} on the high end of the estimated savings range. The low-end estimate doesn't reach ${costPhrase} (${fmt(roofCost)}) within 10 years — actual results depend on which end of the range your situation lands on.`;
+  } else if (breakevenLow === breakevenHigh) {
+    note.textContent = `Projected breakeven: Year ${breakevenHigh + 1}, consistent across the low and high end of the estimated savings range.`;
+  } else {
+    note.textContent = `Projected breakeven: between Year ${breakevenHigh + 1} (high-end estimate) and Year ${breakevenLow + 1} (low-end estimate), against ${costPhrase} of ${fmt(roofCost)}. Savings continue to compound as premiums rise.`;
+  }
 
   const ctx = document.getElementById('savingsChart').getContext('2d');
   if (chartInst) chartInst.destroy();
@@ -857,7 +884,7 @@ function renderChart(yearlyMid, inp) {
           fill: true,
         },
         {
-          label: 'Approx. Roof Cost',
+          label: roofCostIsQuoted ? 'Your Quoted Roof Price' : 'Approx. Roof Cost',
           data: Array(10).fill(roofCost),
           borderColor: '#b08328',
           borderWidth: 2,
@@ -913,7 +940,7 @@ function checkZip() {
 
 // ─── SHARE URL ────────────────────────────────────────────────────────────────
 function syncShareUrl() {
-  const ids = { hv:'homeValue', pr:'premium', ra:'roofAge', cr:'carrier', rt:'roofType', nf:'newRoof', sh:'share', db:'dedBasis', df:'dedFlat', z:'zip' };
+  const ids = { hv:'homeValue', pr:'premium', ra:'roofAge', cr:'carrier', rt:'roofType', nf:'newRoof', sh:'share', db:'dedBasis', df:'dedFlat', z:'zip', qr:'quotedRoofCost' };
   const params = new URLSearchParams();
   Object.entries(ids).forEach(([k,id]) => {
     const v = document.getElementById(id).value;
@@ -924,7 +951,7 @@ function syncShareUrl() {
 
 function loadFromUrl() {
   const p = new URLSearchParams(location.search);
-  const map = { hv:'homeValue', pr:'premium', ra:'roofAge', cr:'carrier', rt:'roofType', nf:'newRoof', sh:'share', db:'dedBasis', df:'dedFlat', z:'zip' };
+  const map = { hv:'homeValue', pr:'premium', ra:'roofAge', cr:'carrier', rt:'roofType', nf:'newRoof', sh:'share', db:'dedBasis', df:'dedFlat', z:'zip', qr:'quotedRoofCost' };
   Object.entries(map).forEach(([k,id]) => { if (p.has(k)) document.getElementById(id).value = p.get(k); });
   if (p.has('sh')) {
     document.getElementById('share').value = p.get('sh');
@@ -939,7 +966,7 @@ function loadFromUrl() {
 }
 
 // ─── EVENT WIRING ────────────────────────────────────────────────────────────
-['homeValue','premium','roofAge','carrier','roofType','newRoof','dedBasis','dedFlat'].forEach(id => {
+['homeValue','premium','roofAge','carrier','roofType','newRoof','dedBasis','dedFlat','quotedRoofCost'].forEach(id => {
   document.getElementById(id).addEventListener('input',  renderAll);
   document.getElementById(id).addEventListener('change', renderAll);
 });
