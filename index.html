@@ -351,11 +351,12 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
       <div class="field">
         <label for="newRoof">New roof system</label>
         <select id="newRoof">
-          <option value="class4" selected>Class 4 Impact-Resistant (UL 2218)</option>
+          <option value="class4" selected>Class 4 Impact-Resistant Shingle (UL 2218)</option>
+          <option value="metal">Class 4 Standing Seam Metal (UL 2218)</option>
           <option value="class3">Class 3 Impact-Resistant (UL 2218)</option>
           <option value="standard">Standard Architectural</option>
         </select>
-        <div class="hint">Class 4 unlocks the largest documented Texas insurance credit.</div>
+        <div class="hint">Class 4 unlocks the largest documented Texas insurance credit — shingle or standing seam. Metal is modeled at ~2.5× shingle cost; enter your actual quote below for real numbers.</div>
       </div>
     </div>
 
@@ -448,6 +449,14 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
         <div class="l-v" id="tenYearRange" style="color:var(--brand)">—</div>
       </div>
       <div class="l-row">
+        <div class="l-k">Your roof investment<small id="netCostNote">—</small></div>
+        <div class="l-v" id="roofCostVal">—</div>
+      </div>
+      <div class="l-row l-divider">
+        <div class="l-k" style="font-weight:700">10-year net position<small>Cumulative estimated savings minus roof cost — insurance position only; excludes resale value and coverage protection</small></div>
+        <div class="l-v range" id="netPositionRange">—</div>
+      </div>
+      <div class="l-row">
         <div class="l-k">Your storm deductible<small>Out of pocket before any storm claim pays</small></div>
         <div class="l-v" id="deductibleVal" style="color:var(--alert)">—</div>
       </div>
@@ -500,8 +509,27 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
     <p class="note" id="breakevenNote"></p>
   </div>
 
+  <!-- ── COST OF WAITING ── -->
+  <div class="card" id="waitCard" style="display:none">
+    <div class="eyebrow">The Cost of Waiting</div>
+    <div class="card-h2">This decision has a clock on it <span style="font-size:.72rem;font-family:var(--f-body);font-weight:500;color:var(--muted);letter-spacing:.02em;vertical-align:middle;margin-left:4px">ESTIMATES</span></div>
+    <p class="note" style="margin-top:.2rem">These two costs accrue whether or not a storm ever hits — foregone premium savings plus roof price escalation:</p>
+    <div class="carrier-tbl-wrap">
+      <table class="carrier-tbl">
+        <thead>
+          <tr><th>If you wait</th><th>Savings foregone</th><th>Price escalation</th><th>Cost of waiting</th></tr>
+        </thead>
+        <tbody id="waitTbody"></tbody>
+      </table>
+    </div>
+    <div class="callout" id="bandCallout" style="display:none"></div>
+    <div class="twia-box">
+      <strong>What's documented vs. modeled:</strong> foregone savings use the same estimate ranges as the projection above. Price escalation is modeled at 5%/yr. The payment-schedule bands referenced here (100/80/60/40/20% of replacement cost by roof age) reflect common Texas roof-schedule endorsements — whether your policy has one, and its exact schedule, is printed on your declarations page. That one page answers this precisely.
+    </div>
+  </div>
+
   <!-- ── CTA ── -->
-  <div class="card cta-center">
+  <div class="card cta-center" id="ctaCard">
     <div class="eyebrow">Next Step</div>
     <div class="card-h2">Get a straight assessment</div>
     <p>A straight assessment — what your carrier sees, what your coverage actually is, and what your options are. No claim filed, no pressure.</p>
@@ -532,7 +560,12 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
 // TDI confirms Class 4 receives the highest credit; the exact amount is filed
 // by each carrier company-by-company (TDI does not publish a schedule).
 const IR_CREDIT = {
-  class4:   { name:'Class 4 Impact-Resistant', range:[0.15,0.35] },
+  class4:   { name:'Class 4 Impact-Resistant Shingle', range:[0.15,0.35] },
+  // Standing seam metal: the documented Texas credit keys to the UL 2218
+  // impact class, not the material. Class 4-rated standing seam panels get
+  // the same filed credit band as Class 4 shingle. No published carrier
+  // schedule pays extra for metal specifically — so we don't model one.
+  metal:    { name:'Class 4 Standing Seam Metal',      range:[0.15,0.35] },
   class3:   { name:'Class 3 Impact-Resistant', range:[0.05,0.15] },
   standard: { name:'Standard Architectural',   range:[0,0] },
 };
@@ -614,13 +647,21 @@ function getInputs() {
 
   const quotedRoofCost = parseFloat(document.getElementById('quotedRoofCost').value) || 0;
   const roofCostIsQuoted = quotedRoofCost > 0;
+
+  // Two costs, two roles — they coincide for shingle and split for metal:
+  // currentRoofCost = insurable replacement value of the roof on the house
+  //   TODAY (drives claim/ACV math — carriers pay like-for-like, not upgrades).
+  // roofCost = investment cost of the chosen NEW system (drives breakeven,
+  //   net position, and price escalation).
+  const currentRoofCost = homeValue > 0
+    ? Math.max(8000, Math.min(28000, homeValue * 0.037 + 2600))
+    : 13000;
+  const METAL_COST_MULT = 2.5; // modeled: installed standing seam vs. architectural shingle
   const roofCost = roofCostIsQuoted
     ? quotedRoofCost
-    : (homeValue > 0
-        ? Math.max(8000, Math.min(28000, homeValue * 0.037 + 2600))
-        : 13000);
+    : (newRoof === 'metal' ? currentRoofCost * METAL_COST_MULT : currentRoofCost);
 
-  return { homeValue, premium, roofAge, ageValid, carrierKey, roofType, newRoof, stormFrac, deductible, roofCost, roofCostIsQuoted };
+  return { homeValue, premium, roofAge, ageValid, carrierKey, roofType, newRoof, stormFrac, deductible, roofCost, roofCostIsQuoted, currentRoofCost };
 }
 
 function show(id)  { document.getElementById(id).style.display = ''; }
@@ -641,6 +682,9 @@ function renderVerdict(age) {
   } else if (age >= 15) {
     h.textContent = "You're in the window carriers watch closely.";
     b.textContent = `At ${age} years, depreciation is climbing and carriers are reviewing. Some are already shifting to Actual Cash Value — meaning you'd collect far less than replacement cost after a storm. Replacing now keeps you in control at renewal.`;
+  } else if (age >= 13) {
+    h.textContent = "Your replacement-cost coverage has an expiration date — and you don't control it.";
+    b.textContent = `At ${age} years you likely still have full replacement-cost coverage. That's a live asset. But many Texas policies convert to Actual Cash Value at 15 — some carriers sooner — and the conversion happens at renewal, not on your schedule. Waiting is a bet that a storm beats the conversion date. If it doesn't, the coverage quietly shrinks and you buy the roof anyway, later, at a higher price.`;
   } else if (age >= 11) {
     h.textContent = "Your roof is entering the danger window.";
     b.textContent = `At ${age} years, the gap between what you pay and what you'd actually collect in a claim is starting to widen. This is when homeowners get surprised. A new wind-rated roof closes that gap before it matters.`;
@@ -667,7 +711,7 @@ function renderSunk(premium, roofAge, stormFrac) {
 // ─── SAVINGS FORECAST ─────────────────────────────────────────────────────────
 function renderSavings(inp) {
   const { premium, roofAge, ageValid, carrierKey, newRoof, stormFrac, deductible } = inp;
-  if (!premium || !ageValid) { hide('savingsCard'); hide('carrierCard'); return; }
+  if (!premium || !ageValid) { hide('savingsCard'); hide('carrierCard'); hide('waitCard'); return; }
 
   const ir    = IR_CREDIT[newRoof] || IR_CREDIT.standard;
   const af    = ageFactor(roofAge);
@@ -715,15 +759,95 @@ function renderSavings(inp) {
     windEl.innerHTML = fmtR(wLo, wHi) + '/yr';
     windNote.textContent = `${ir.name} (UL 2218) — verified to your carrier with TDI form PC-068`;
     cosmEl.style.display = '';
+    if (newRoof === 'metal') {
+      cosmEl.innerHTML = `<strong>The fine print matters more on metal:</strong> carriers commonly require a cosmetic-damage exclusion endorsement to apply the impact-resistant credit — and on standing seam, hail dents that don't compromise the roof are visible and permanent, not hidden in shingle texture. The system still protects the home, but the exclusion is a bigger trade on metal than on shingle. Price it in knowingly before you sign, not at claim time.`;
+    } else {
+      cosmEl.innerHTML = `<strong>The fine print most roofers won't tell you:</strong> many Texas carriers require a cosmetic-damage exclusion endorsement to apply the full impact-resistant credit — meaning dents that don't compromise the roof aren't paid. On a Class 4 system that's usually a fair trade, but you should accept it knowingly, not discover it at claim time. Ask your agent before you sign.`;
+    }
   }
 
   document.getElementById('annualRange').innerHTML  = fmtR(annLo, annHi) + '/yr';
   document.getElementById('tenYearRange').innerHTML = fmtR(cumLo, cumHi);
+
+  // Net position: cumulative savings minus roof investment.
+  // Low end uses conservative savings; high end uses optimistic savings.
+  // Same roof cost on both sides — the range comes from the savings model,
+  // not from cost uncertainty.
+  const { roofCost, roofCostIsQuoted } = inp;
+  document.getElementById('roofCostVal').textContent = fmt(roofCost);
+  document.getElementById('netCostNote').textContent = roofCostIsQuoted
+    ? 'Your quoted price'
+    : 'Modeled estimate — enter your actual quote above for a real number';
+  const netLo = cumLo - roofCost;
+  const netHi = cumHi - roofCost;
+  const netEl = document.getElementById('netPositionRange');
+  const sgn = v => (v < 0 ? '−' + fmt(Math.abs(v)) : '+' + fmt(v));
+  netEl.innerHTML = `${sgn(netLo)} → ${sgn(netHi)}`;
+  netEl.style.color = netHi < 0 ? 'var(--alert)' : (netLo >= 0 ? 'var(--brand)' : 'var(--ink)');
   show('savingsCard');
 
   renderLeverGuide(carrierKey, roofAge);
   renderChart(yearlyMid, yearlyLow, yearlyHigh, inp);
+  renderWait(inp, yearlyLow, yearlyHigh);
   return { annLo, annHi, cumLo, cumHi, yearlyMid };
+}
+
+// ─── COST OF WAITING ──────────────────────────────────────────────────────────
+// Payment-schedule bands modeled from common Texas roof-schedule endorsements
+// (e.g., HOA HO3/HOB RSP forms). Actual schedules vary by carrier and form —
+// the card's disclosure box says so and points to the declarations page.
+const PAY_BANDS = [[5, 1.00], [10, 0.80], [15, 0.60], [20, 0.40], [Infinity, 0.20]];
+const payFactor = age => PAY_BANDS.find(b => age <= b[0])[1];
+const ROOF_INFLATION = 0.05; // modeled material + labor escalation
+const bandPct = f => Math.round(f * 100) + '%';
+
+function renderWait(inp, yearlyLow, yearlyHigh) {
+  const { premium, roofAge, ageValid, roofCost, newRoof, currentRoofCost } = inp;
+  if (!premium || !ageValid) { hide('waitCard'); return; }
+  // Band-crossing exposure is on the CURRENT roof; price escalation is on
+  // the NEW system. Different roofs, different costs.
+  const claimBase = (newRoof === 'metal') ? currentRoofCost : roofCost;
+
+  // Certain costs: foregone savings (cumulative, same low/high model as the
+  // chart) plus roof price escalation. Kept strictly separate from the
+  // contingent claim-value exposure below — they are different kinds of cost
+  // and adding them into one number would overstate certainty.
+  const rows = [];
+  for (let d = 1; d <= 3; d++) {
+    const fLo = yearlyLow[d - 1], fHi = yearlyHigh[d - 1];
+    const rise = roofCost * (Math.pow(1 + ROOF_INFLATION, d) - 1);
+    rows.push(
+      `<tr><td>${d} year${d > 1 ? 's' : ''}</td>` +
+      `<td class="disc-lo">${fmtR(fLo, fHi)}</td>` +
+      `<td>${fmt(rise)}</td>` +
+      `<td style="color:var(--alert);font-weight:600">${fmtR(fLo + rise, fHi + rise)}</td></tr>`
+    );
+  }
+  document.getElementById('waitTbody').innerHTML = rows.join('');
+
+  // Contingent exposure: does this roof cross a payment-schedule band soon?
+  const nowF = payFactor(roofAge);
+  let cross = 0;
+  for (let d = 1; d <= 15; d++) {
+    if (payFactor(roofAge + d) < nowF) { cross = d; break; }
+  }
+  const co = document.getElementById('bandCallout');
+  let msg = '';
+  if (roofAge > 20) {
+    msg = `<strong>The bigger clock:</strong> at ${roofAge} years this roof is past the bottom of common payment schedules, and roof age alone is a documented non-renewal trigger around the 20-year mark in Texas. The question is no longer discounts — it's staying insurable.`;
+  } else if (cross > 0 && cross <= 3) {
+    const newF = payFactor(roofAge + cross);
+    const drop = claimBase * (nowF - newF);
+    msg = `<strong>The conditional cost is bigger than the table:</strong> at ${roofAge} years, common Texas roof payment schedules pay ${bandPct(nowF)} of replacement cost on a claim. In ${cross} year${cross > 1 ? 's' : ''} that band drops to ${bandPct(newF)} — roughly ${fmt(drop)} less paid on this roof if hail arrives after the crossing. This applies only if your policy pays on a roof schedule or ACV, which is exactly what the declarations page tells you.`;
+  } else if (cross > 0) {
+    msg = `<strong>Where this roof sits:</strong> common Texas payment schedules pay ${bandPct(nowF)} of replacement cost at ${roofAge} years. The next band drop is about ${cross} years out — the certain costs in the table above are the active clock for now.`;
+  }
+  if (roofAge < 15 && roofAge + 3 >= 15) {
+    msg += ` Separately: many Texas policies convert from replacement-cost to actual-cash-value coverage at the 15-year mark — some carriers apply roof-age ACV endorsements as early as year 10.`;
+  }
+  if (msg) { co.innerHTML = msg; co.style.display = ''; } else { co.style.display = 'none'; }
+
+  show('waitCard');
 }
 
 // ─── DISCOUNT LEVER GUIDE ─────────────────────────────────────────────────────
@@ -779,10 +903,14 @@ function renderLeverGuide(selectedKey, roofAge) {
 
 // ─── COVERAGE / ACV ───────────────────────────────────────────────────────────
 function renderCoverage(inp) {
-  const { homeValue, roofAge, ageValid, roofCost, roofCostIsQuoted, deductible } = inp;
+  const { homeValue, roofAge, ageValid, roofCost, roofCostIsQuoted, deductible, newRoof, currentRoofCost } = inp;
   if (!ageValid) { hide('coverageCard'); return; }
   show('coverageCard');
-  const roofCostLabel = roofCostIsQuoted ? 'Roof replacement cost (your quote)' : 'Roof replacement cost (modeled estimate)';
+  // Claim math is about the roof on the house today. A quote for a metal
+  // upgrade must not inflate what the policy would pay on the current roof.
+  const claimIsQuote = roofCostIsQuoted && newRoof !== 'metal';
+  const claimCost = (newRoof === 'metal') ? currentRoofCost : roofCost;
+  const roofCostLabel = claimIsQuote ? 'Roof replacement cost (your quote)' : 'Current roof replacement cost (modeled estimate)';
 
   const badge = document.getElementById('covBadge');
   const acvSec = document.getElementById('acvSection');
@@ -799,8 +927,8 @@ function renderCoverage(inp) {
   if (roofAge >= 11) {
     const depr     = Math.min(roofAge / 25, 0.96);
     const deprPct  = Math.round(depr * 100);
-    const acvPay   = Math.max(0, roofCost * (1 - depr) - deductible);
-    const rcvPay   = Math.max(0, roofCost - deductible);
+    const acvPay   = Math.max(0, claimCost * (1 - depr) - deductible);
+    const rcvPay   = Math.max(0, claimCost - deductible);
     const protect  = rcvPay - acvPay;
     const zero     = acvPay <= 0;
     const ded      = deductible > 0 ? fmt(deductible) : '(enter home value)';
@@ -814,8 +942,8 @@ function renderCoverage(inp) {
         If your ${roofAge}-year-old roof is damaged in a hurricane:
       </p>
       <table class="acv-tbl">
-        <tr><td class="ak">${roofCostLabel}</td><td class="av">${fmt(roofCost)}</td></tr>
-        <tr><td class="ak">ACV depreciation (${deprPct}%)</td><td class="av neg">&minus;${fmt(roofCost * depr)}</td></tr>
+        <tr><td class="ak">${roofCostLabel}</td><td class="av">${fmt(claimCost)}</td></tr>
+        <tr><td class="ak">ACV depreciation (${deprPct}%)</td><td class="av neg">&minus;${fmt(claimCost * depr)}</td></tr>
         <tr><td class="ak">Your deductible</td><td class="av neg">&minus;${ded}</td></tr>
         <tr class="acv-div">
           <td class="ak"><strong>ACV policy pays you</strong></td>
@@ -823,7 +951,7 @@ function renderCoverage(inp) {
         </tr>
         ${zeroNote}
         <tr><td colspan="2" style="padding:9px 10px 3px;font-weight:700;font-size:.8rem;color:var(--brand)">With a new roof (RCV policy):</td></tr>
-        <tr><td class="ak">${roofCostLabel}</td><td class="av">${fmt(roofCost)}</td></tr>
+        <tr><td class="ak">${roofCostLabel}</td><td class="av">${fmt(claimCost)}</td></tr>
         <tr><td class="ak">Your deductible</td><td class="av neg">&minus;${ded}</td></tr>
         <tr class="acv-div"><td class="ak"><strong>RCV policy pays you</strong></td><td class="av pos">${fmt(rcvPay)}</td></tr>
       </table>
@@ -834,6 +962,9 @@ function renderCoverage(inp) {
         </div>
         <div class="pb-val">${fmt(protect)}</div>
       </div>`;
+    if (newRoof === 'metal') {
+      acvSec.innerHTML += `<p class="note" style="margin-top:8px">Claim figures use your current roof's modeled replacement value — a policy pays to replace what's on the house today, not to fund the metal upgrade.</p>`;
+    }
   } else {
     acvSec.innerHTML = '';
   }
@@ -916,12 +1047,31 @@ function renderChart(yearlyMid, yearlyLow, yearlyHigh, inp) {
 }
 
 // ─── MAIN RENDER ──────────────────────────────────────────────────────────────
+// ─── NARRATIVE ORDER ──────────────────────────────────────────────────────────
+// Under 13 years: discount-led story (savings first).
+// 13+ years: insurability-led story (coverage position, then the clock,
+// then the upside). Same facts, ordered for the situation actually on
+// the roof — no card is hidden, only re-sequenced.
+function orderCards(roofAge) {
+  const olderFirst = roofAge >= 13;
+  const seq = olderFirst
+    ? ['verdictCard','sunkCard','coverageCard','waitCard','savingsCard','carrierCard','chartCard']
+    : ['verdictCard','sunkCard','savingsCard','carrierCard','coverageCard','chartCard','waitCard'];
+  const cta = document.getElementById('ctaCard');
+  const parent = cta.parentNode;
+  seq.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) parent.insertBefore(el, cta);
+  });
+}
+
 function renderAll() {
   const inp = getInputs();
   renderVerdict(inp.ageValid ? inp.roofAge : null);
   renderSunk(inp.premium, inp.roofAge, inp.stormFrac);
   renderSavings(inp);
   renderCoverage(inp);
+  orderCards(inp.ageValid ? inp.roofAge : 0);
   syncShareUrl();
 }
 
