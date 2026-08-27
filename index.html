@@ -381,9 +381,7 @@ footer{max-width:680px;margin:0 auto;padding:1.4rem 1.4rem 0;text-align:center}
         </div>
         <input id="share" type="range" min="40" max="70" value="60" step="5">
         <div class="presets">
-          <button type="button" class="preset" data-share="50">Inland (50%)</button>
-          <button type="button" class="preset active" data-share="60">Mid Houston (60%)</button>
-          <button type="button" class="preset" data-share="70">Near Coast (70%)</button>
+          <button type="button" class="preset" data-share="50">Inland (50%)</button><button type="button" class="preset active" data-share="60">Mid Houston (60%)</button><button type="button" class="preset" data-share="70">Near Coast (70%)</button>
         </div>
       </div>
       <div class="hint">Texas market reporting puts wind/hail at roughly 40–60% of a typical premium, higher near the coast. This is the slice a new roof actually moves.</div>
@@ -613,16 +611,11 @@ const pct  = n => Math.round(n * 100) + '%';
 const fmtR = (lo, hi) => `${fmt(lo)}<span style="opacity:.55"> – </span>${fmt(hi)}`;
 
 // ─── ZIP ───────────────────────────────────────────────────────────────────────
-const EXTRA_ZIPS = new Set([
-  '77058','77059','77062','77338','77339','77345','77346','77373','77379','77396',
-  '77429','77433','77449','77450','77459','77478','77479','77489','77493','77494',
-  '77536','77573','77581','77584','77588'
-]);
-
-function isHoustonZip(z) {
-  if (!/^\d{5}$/.test(z)) return null;
-  if (EXTRA_ZIPS.has(z)) return true;
-  const n = parseInt(z, 10);
+function isServiceAreaZip(z){
+  const EXTRA_ZIPS = new Set(['77058','77059','77062','77338','77339','77345','77346','77373','77379','77396','77429','77433','77449','77450','77459','77478','77479','77489','77493','77494','77536','77573','77581','77584','77588']);
+  if(!/^\d{5}$/.test(z)) return null;
+  if(EXTRA_ZIPS.has(z)) return true;
+  const n = parseInt(z,10);
   return n >= 77001 && n <= 77598;
 }
 
@@ -1082,7 +1075,7 @@ function checkZip() {
   const inp = document.getElementById('zip');
   if (!z)         { msg.className = 'zip-msg'; inp.classList.remove('err'); return; }
   if (z.length < 5){ msg.className = 'zip-msg'; return; }
-  const s = isHoustonZip(z);
+  const s = isServiceAreaZip(z);
   if (s === true)       { msg.className='zip-msg ok'; msg.textContent="Houston metro — you're in our service area."; inp.classList.remove('err'); }
   else if (s === false) { msg.className='zip-msg out'; msg.textContent='This tool is built for the Houston metro area. Call 512-945-9720 for a consultation anywhere in Texas.'; inp.classList.add('err'); }
   else                  { msg.className='zip-msg err'; msg.textContent='Please enter a valid 5-digit ZIP code.'; inp.classList.add('err'); }
